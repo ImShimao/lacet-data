@@ -1,0 +1,89 @@
+[
+  {
+    "nom": "France",
+    "bbox": "-5.25,41.30,9.60,51.15",
+    "bandes": 8,
+    "sources": [
+      "europe/france",
+      "europe/belgium",
+      "europe/luxembourg",
+      "europe/monaco",
+      "europe/andorra",
+      "europe/switzerland",
+      "europe/germany/baden-wuerttemberg",
+      "europe/germany/rheinland-pfalz",
+      "europe/germany/saarland",
+      "europe/italy/nord-ovest",
+      "europe/spain/cataluna",
+      "europe/spain/aragon",
+      "europe/spain/navarra",
+      "europe/spain/pais-vasco"
+    ]
+  },
+  {
+    "nom": "Suisse",
+    "bbox": "5.90,45.75,10.55,47.85",
+    "bandes": 3,
+    "sources": [
+      "europe/switzerland",
+      "europe/liechtenstein",
+      "europe/france",
+      "europe/italy/nord-ovest",
+      "europe/germany/baden-wuerttemberg",
+      "europe/austria"
+    ]
+  },
+  {
+    "nom": "Belgique et Luxembourg",
+    "bbox": "2.50,49.45,6.45,51.55",
+    "bandes": 2,
+    "sources": [
+      "europe/belgium",
+      "europe/luxembourg",
+      "europe/france",
+      "europe/netherlands",
+      "europe/germany/nordrhein-westfalen",
+      "europe/germany/rheinland-pfalz"
+    ]
+  },
+  {
+    "nom": "Allemagne du Sud-Ouest",
+    "bbox": "6.00,47.25,10.55,50.95",
+    "bandes": 3,
+    "sources": [
+      "europe/germany/baden-wuerttemberg",
+      "europe/germany/rheinland-pfalz",
+      "europe/germany/saarland",
+      "europe/germany/hessen",
+      "europe/germany/bayern",
+      "europe/france",
+      "europe/switzerland",
+      "europe/austria",
+      "europe/luxembourg",
+      "europe/belgium"
+    ]
+  },
+  {
+    "nom": "Italie du Nord-Ouest",
+    "bbox": "6.55,43.75,10.55,46.55",
+    "bandes": 2,
+    "sources": [
+      "europe/italy/nord-ovest",
+      "europe/italy/nord-est",
+      "europe/italy/centro",
+      "europe/france",
+      "europe/switzerland",
+      "europe/monaco"
+    ]
+  },
+  {
+    "nom": "Espagne du Nord-Est",
+    "bbox": "-2.55,40.25,3.55,43.85",
+    "bandes": 3,
+    "sources": [
+      "europe/spain",
+      "europe/france",
+      "europe/andorra"
+    ]
+  }
+]
