@@ -1,0 +1,200 @@
+name: Rues
+
+# Les rues de France, découpées en archives. Voir le README pour le pourquoi.
+#
+# Une fois par mois : les rues d'un quartier ne changent pas d'une semaine à
+# l'autre, et l'app sert de toute façon une tuile de moins de trois mois avant de
+# la rafraîchir elle-même.
+on:
+  schedule:
+    - cron: '0 3 2 * *'
+  workflow_dispatch:
+    inputs:
+      bbox:
+        description: "Emprise à construire, « w,s,e,n ». Vide = France métropolitaine."
+        required: false
+        default: ''
+      voisins:
+        description: "Télécharger aussi les extraits frontaliers (indispensable près d'une frontière)."
+        type: boolean
+        required: false
+        default: true
+
+concurrency: rues
+
+permissions:
+  contents: write
+
+jobs:
+  rues:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      # France métropolitaine, alignée sur la grille des tuiles (0,05°).
+      FRANCE: '-5.25,41.30,9.60,51.15'
+      # Les voisins, pour que les tuiles frontalières soient complètes. Des
+      # extraits de région plutôt que des pays entiers là où c'est possible :
+      # l'Allemagne entière pèse quatre gigaoctets pour une bande de trente
+      # kilomètres qui nous intéresse.
+      NEIGHBOURS: >-
+        europe/belgium
+        europe/luxembourg
+        europe/monaco
+        europe/andorra
+        europe/switzerland
+        europe/germany/baden-wuerttemberg
+        europe/germany/rheinland-pfalz
+        europe/germany/saarland
+        europe/italy/nord-ovest
+        europe/spain/cataluna
+        europe/spain/aragon
+        europe/spain/navarra
+        europe/spain/pais-vasco
+      # Le découpage en bandes de latitude : une bande entière tient en mémoire,
+      # la France entière non. Elles se chevauchent pour qu'aucune tuile ne tombe
+      # sur une couture.
+      BANDS: 8
+      OVERLAP: 0.15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Outils
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool
+          pip install --quiet osmium
+          # Le disque de travail : le dépôt vit sur une partition de 14 Go, trop
+          # juste pour la France et ses voisins.
+          sudo mkdir -p /mnt/rues
+          sudo chown "$USER" /mnt/rues
+          df -h / /mnt | tail -2
+
+      - name: Extraits OpenStreetMap
+        run: |
+          set -euo pipefail
+          cd /mnt/rues
+          BBOX="${{ github.event.inputs.bbox }}"
+          BBOX="${BBOX:-$FRANCE}"
+          echo "BBOX=$BBOX" >> "$GITHUB_ENV"
+          echo "emprise : $BBOX"
+
+          # Un essai au milieu du pays n'a que faire des extraits frontaliers,
+          # et ce sont eux qui coûtent le plus long du téléchargement.
+          zones="europe/france"
+          if [ "${{ github.event.inputs.voisins }}" != "false" ]; then zones="$zones $NEIGHBOURS"; fi
+
+          n=0
+          for zone in $zones; do
+            n=$((n + 1))
+            echo "::group::$zone"
+            curl -sSfL -o source.osm.pbf "https://download.geofabrik.de/${zone}-latest.osm.pbf"
+            # `--strategy complete_ways` : une rue coupée par l'emprise est
+            # gardée entière, ce qui rend les tuiles du bord utilisables.
+            osmium extract --bbox "$BBOX" --set-bounds --overwrite -o "part-$n.osm.pbf" source.osm.pbf
+            rm source.osm.pbf
+            ls -lh "part-$n.osm.pbf"
+            echo "::endgroup::"
+          done
+
+          # Les objets présents des deux côtés d'une frontière ne sont gardés
+          # qu'une fois.
+          osmium merge --overwrite -o tout.osm.pbf part-*.osm.pbf
+          rm part-*.osm.pbf
+          ls -lh tout.osm.pbf
+          df -h /mnt | tail -1
+
+      - name: Découpage en tuiles
+        run: |
+          set -euo pipefail
+          cd /mnt/rues
+          mkdir -p tuiles
+
+          # La sélection : un rectangle, celui de l'emprise demandée. Les tuiles
+          # de la mer sont gardées comme les autres — rien au-delà ne manque.
+          python - "$BBOX" > zone.poly <<'PY'
+          import sys
+          w, s, e, n = (float(v) for v in sys.argv[1].split(','))
+          print("zone")
+          print("1")
+          for lon, lat in ((w, s), (e, s), (e, n), (w, n), (w, s)):
+              print(f"   {lon:.7E}   {lat:.7E}")
+          print("END")
+          print("END")
+          PY
+
+          IFS=, read -r W S E N <<< "$BBOX"
+          python - "$S" "$N" "$BANDS" "$OVERLAP" > bandes.txt <<'PY'
+          import sys
+          s, n, bands, overlap = float(sys.argv[1]), float(sys.argv[2]), int(sys.argv[3]), float(sys.argv[4])
+          step = (n - s) / bands
+          for k in range(bands):
+              print(f"{max(s, s + k * step - overlap):.4f} {min(n, s + (k + 1) * step + overlap):.4f}")
+          PY
+
+          k=0
+          while read -r bs bn; do
+            k=$((k + 1))
+            echo "::group::bande $k : $bs → $bn"
+            osmium extract --bbox "$W,$bs,$E,$bn" --set-bounds --overwrite -o bande.osm.pbf tout.osm.pbf
+            # `--source-bbox=` et non `--source-bbox ` : la longitude ouest de la
+            # France vaut -5,25, et une valeur qui commence par un tiret est prise
+            # pour une option.
+            python "$GITHUB_WORKSPACE/scripts/region_tiles.py" \
+              bande.osm.pbf zone.poly tuiles --name "Bande $k" --source-bbox="$W,$bs,$E,$bn"
+            rm bande.osm.pbf
+            echo "::endgroup::"
+          done < bandes.txt
+
+          rm -f tuiles/index.json tout.osm.pbf
+          echo "$(ls tuiles | wc -l) tuiles, $(du -sh tuiles | cut -f1)"
+
+      - name: Archives
+        run: |
+          set -euo pipefail
+          cd /mnt/rues
+          python "$GITHUB_WORKSPACE/scripts/pack_tiles.py" tuiles packs --name "France"
+          du -sh packs
+          # Sans `|| true`, `head` ferme le tuyau, `ls` s'en plaint, et
+          # `pipefail` jette deux heures de fabrication pour un aperçu.
+          ls -lh packs | head -5 || true
+
+      - name: Publication
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          rm -rf packs
+          cp -r /mnt/rues/packs packs
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Une branche neuve à chaque fabrication : sans cela, l'historique
+          # garderait chaque mois un gigaoctet d'archives que personne ne relira.
+          git checkout --orphan publication
+          git reset -q
+
+          # Les outils d'abord, les archives ensuite et **par lots** : GitHub
+          # refuse une poussée de plus de deux gigaoctets, et la France en
+          # approche. Chaque lot est un envoi de quelques centaines de
+          # mégaoctets, ce qui repart aussi plus facilement après une coupure.
+          jour="$(date -u +%Y-%m-%d)"
+          git add -A -- . ':!packs'
+          git commit -q -m "Outils du $jour"
+          git push -q -f origin publication
+
+          ls packs > /tmp/archives.txt
+          split -l 50 /tmp/archives.txt /tmp/lot-
+          for lot in /tmp/lot-*; do
+            while read -r nom; do git add "packs/$nom"; done < "$lot"
+            git commit -q -m "Rues du $jour ($(basename "$lot"))"
+            git push -q origin publication
+          done
+
+          git push -f origin publication:main
+          du -sh packs
+          echo "$(ls packs | wc -l) fichiers publiés"
