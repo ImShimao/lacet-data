@@ -203,16 +203,24 @@ jobs:
           # refuse une poussée de plus de deux gigaoctets. Chaque lot est un
           # envoi de quelques centaines de mégaoctets, ce qui repart aussi plus
           # facilement après une coupure.
+          #
+          # **Rien à valider n'est pas une erreur.** En ajoutant une zone, on
+          # repart de ce qui est publié : les outils n'ont pas bougé, et la
+          # plupart des lots ne contiennent que des archives déjà en place.
+          # `git commit` sort alors en échec, et le travail de deux heures
+          # partait à la poubelle au tout dernier pas.
           jour="$(date -u +%Y-%m-%d)"
+          valider() { git diff --cached --quiet || git commit -q -m "$1"; }
+
           git add -A -- . ':!packs'
-          git commit -q -m "Outils du $jour"
+          valider "Outils du $jour"
           git push -q -f origin publication
 
           ls packs > /tmp/archives.txt
           split -l 50 /tmp/archives.txt /tmp/lot-
           for lot in /tmp/lot-*; do
             while read -r nom; do git add "packs/$nom"; done < "$lot"
-            git commit -q -m "Rues du $jour ($(basename "$lot"))"
+            valider "Rues du $jour ($(basename "$lot"))"
             git push -q origin publication
           done
 
