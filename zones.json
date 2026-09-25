@@ -85,5 +85,41 @@
       "europe/france",
       "europe/andorra"
     ]
+  },
+  {
+    "nom": "Autriche",
+    "bbox": "9.45,46.30,17.20,49.05",
+    "bandes": 3,
+    "sources": [
+      "europe/austria",
+      "europe/germany/bayern",
+      "europe/switzerland",
+      "europe/liechtenstein",
+      "europe/italy/nord-est",
+      "europe/slovenia",
+      "europe/slovakia",
+      "europe/czech-republic",
+      "europe/hungary"
+    ]
+  },
+  {
+    "nom": "Pays-Bas",
+    "bbox": "3.30,50.70,7.25,53.60",
+    "bandes": 2,
+    "sources": [
+      "europe/netherlands",
+      "europe/belgium",
+      "europe/germany/nordrhein-westfalen",
+      "europe/germany/niedersachsen"
+    ]
+  },
+  {
+    "nom": "Portugal",
+    "bbox": "-9.60,36.90,-6.15,42.20",
+    "bandes": 2,
+    "sources": [
+      "europe/portugal",
+      "europe/spain"
+    ]
   }
 ]
